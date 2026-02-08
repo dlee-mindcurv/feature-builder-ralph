@@ -1,7 +1,7 @@
 /tmp
 /out-tsc
 
-/node_modules
+node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -10,3 +10,17 @@ yarn-error.log*
 
 .vscode/*
 .idea
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Environment
+.env*.local
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Testing
+coverage/
