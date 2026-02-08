@@ -20,41 +20,94 @@
       ],
       "priority": 1,
       "model": "sonnet",
-      "passes": true,
+      "passes": false,
       "notes": "",
       "jobs": [
         {
           "name": "build",
           "agent": "build-user-story",
-          "status": "done",
+          "status": "pending",
           "dependsOn": null,
           "notes": ""
         },
         {
           "name": "playwright",
           "agent": "run-playwright",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "build",
           "notes": ""
         },
         {
           "name": "test",
           "agent": "write-tests",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "build",
           "notes": ""
         },
         {
           "name": "typecheck",
           "agent": "run-typecheck",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "test",
           "notes": ""
         },
         {
           "name": "lint",
           "agent": "run-lint",
-          "status": "done",
+          "status": "pending",
+          "dependsOn": "typecheck",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "GitHub Repository Link",
+      "description": "As a user, I want a link to the project's GitHub repository in the footer so I can easily find the source code.",
+      "acceptanceCriteria": [
+        "Footer contains a visible link to https://github.com/dlee-mindcurv/ralph-native-with-subagents",
+        "Link opens in a new tab (target=\"_blank\" with rel=\"noopener noreferrer\")",
+        "Link includes a GitHub icon (SVG) alongside the text",
+        "Link is styled consistently with existing footer navigation links",
+        "Link is accessible (proper link text, not just an icon)"
+      ],
+      "priority": 2,
+      "model": "sonnet",
+      "passes": false,
+      "notes": "",
+      "jobs": [
+        {
+          "name": "build",
+          "agent": "build-user-story",
+          "status": "pending",
+          "dependsOn": null,
+          "notes": ""
+        },
+        {
+          "name": "playwright",
+          "agent": "run-playwright",
+          "status": "pending",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "test",
+          "agent": "write-tests",
+          "status": "pending",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "typecheck",
+          "agent": "run-typecheck",
+          "status": "pending",
+          "dependsOn": "test",
+          "notes": ""
+        },
+        {
+          "name": "lint",
+          "agent": "run-lint",
+          "status": "pending",
           "dependsOn": "typecheck",
           "notes": ""
         }
