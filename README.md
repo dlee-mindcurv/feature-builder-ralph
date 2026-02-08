@@ -178,6 +178,27 @@ mkdir -p features/my-feature
 
 4. The orchestrator dispatches subagents to implement, test, type-check, and lint the feature automatically.
 
+### Running with Ralph Wiggum
+
+For features with multiple user stories, the orchestrator processes one story per invocation. The **Ralph Wiggum loop** re-invokes the orchestrator automatically until all stories pass, so you don't have to manually re-run the command.
+
+```
+/ralph-wiggum:ralph-loop "/create-feature-from-json features/<name>/prd.json" --completion-promise "COMPLETED"
+```
+
+**Key options:**
+
+- `--completion-promise "COMPLETED"` (required) — stops the loop when the orchestrator outputs `<Promise>COMPLETED</Promise>`
+- `--max-iterations <n>` (optional) — safety limit on the number of iterations to prevent runaway loops
+
+**To cancel a running loop:**
+
+```
+/ralph-wiggum:cancel-ralph
+```
+
+> **Prerequisite:** The [Ralph Wiggum](https://github.com/dlee-mindcurv/ralph-wiggum) plugin must be installed in your Claude Code environment.
+
 ## License
 
 Private repository.
