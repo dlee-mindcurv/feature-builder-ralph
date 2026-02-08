@@ -24,3 +24,6 @@ tsconfig.tsbuildinfo
 
 # Testing
 coverage/
+example/src/__e2e__/
+example/test-results/
+__e2e__

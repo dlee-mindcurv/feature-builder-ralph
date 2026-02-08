@@ -1,5 +1,6 @@
 {
   "project": "taskflow",
+  "appDir": "example",
   "branchName": "feature/pink-footer",
   "description": "Add a distinctive, funky pink footer to TaskFlow that breaks from the conventional design system, providing navigation links, branding, and a memorable visual identity with full responsive and dark mode support.",
   "userStories": [
@@ -15,19 +16,48 @@
         "The footer displays the TaskFlow brand name and copyright line (e.g. 'TaskFlow 2026')",
         "The footer includes at least three navigation links (e.g. Home, About, Privacy) styled for legibility against the pink background with visible hover/focus states",
         "On desktop (md+), footer content is laid out horizontally; on mobile (<md), content stacks vertically and is centered",
-        "Dark mode support: footer uses a darker/muted pink variant (e.g. dark:bg-pink-900) with legible text in both themes",
-        "Write unit tests for the Footer component in a separate test file",
-        "Tests pass/jest coverage is 80%",
-        "Typecheck passes",
-        "Lint passes",
-        "Verify in browser using pdm-webapp-testing skill"
+        "Dark mode support: footer uses a darker/muted pink variant (e.g. dark:bg-pink-900) with legible text in both themes"
       ],
       "priority": 1,
       "model": "sonnet",
-      "passes": false,
+      "passes": true,
       "notes": "",
       "jobs": [
-        {"name": "build", "agent": "build-user-story", "status": "pending", "dependsOn": null, "notes": ""},
+        {
+          "name": "build",
+          "agent": "build-user-story",
+          "status": "done",
+          "dependsOn": null,
+          "notes": ""
+        },
+        {
+          "name": "playwright",
+          "agent": "run-playwright",
+          "status": "done",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "test",
+          "agent": "write-tests",
+          "status": "done",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "typecheck",
+          "agent": "run-typecheck",
+          "status": "done",
+          "dependsOn": "test",
+          "notes": ""
+        },
+        {
+          "name": "lint",
+          "agent": "run-lint",
+          "status": "done",
+          "dependsOn": "typecheck",
+          "notes": ""
+        }
       ]
     }
   ]

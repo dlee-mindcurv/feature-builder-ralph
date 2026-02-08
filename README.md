@@ -8,7 +8,8 @@ Ralph is a declarative feature development system built on [Claude Code](https:/
 features/pink-footer/prd.json          .claude/agents/
 ┌──────────────────────────┐     ┌──────────────────────────┐
 │  User Story: US-001      │     │  build-user-story.md     │
-│  ├─ build    → pending   │────▶│  write-tests.md          │
+│  ├─ build    → pending   │────▶│  run-playwright.md       │
+│  ├─ playwright→ pending  │     │  write-tests.md          │
 │  ├─ test     → pending   │     │  run-typecheck.md        │
 │  ├─ typecheck→ pending   │     │  run-lint.md             │
 │  └─ lint     → pending   │     └──────────────────────────┘
@@ -39,6 +40,7 @@ features/pink-footer/prd.json          .claude/agents/
 ├── .claude/
 │   ├── agents/                # Subagent definitions
 │   │   ├── build-user-story.md
+│   │   ├── run-playwright.md
 │   │   ├── write-tests.md
 │   │   ├── run-typecheck.md
 │   │   └── run-lint.md
@@ -62,17 +64,20 @@ Each agent handles one job type and receives the feature file path and app direc
 
 | Agent | Purpose | Tools |
 |-------|---------|-------|
-| `build-user-story` | Implements the story code | Read, Write, Edit |
+| `build-user-story` | Implements the story code, sets status to `"generated"` | Read, Write, Edit |
+| `run-playwright` | Runs Playwright E2E tests, promotes build to `"done"` | Read, Write, Edit, Bash, Glob, Grep |
 | `write-tests` | Writes unit tests matching project patterns | Read, Write, Edit, Bash |
 | `run-typecheck` | Runs `tsc --noEmit` and fixes errors | Read, Write, Edit, Bash |
 | `run-lint` | Runs ESLint and fixes violations | Read, Write, Edit, Bash |
 
 ### Job Dependencies
 
-Jobs declare dependencies via `dependsOn`. The orchestrator only dispatches a job when its dependency is resolved:
+Jobs declare dependencies via `dependsOn`. The orchestrator only dispatches a job when its own status is `"pending"` and its dependency is resolved. This prevents completed jobs from being re-dispatched on subsequent invocations.
+
+The build job uses a two-phase status flow: the build agent sets it to `"generated"`, then the Playwright agent promotes it to `"done"` after visual validation passes.
 
 ```
-build (no dependency) → test → typecheck → lint
+build (no dependency) → playwright (gates on "generated") → test → typecheck → lint
 ```
 
 ## Feature Specification Format
@@ -98,6 +103,7 @@ build (no dependency) → test → typecheck → lint
       "passes": false,
       "jobs": [
         { "name": "build", "agent": "build-user-story", "status": "pending", "dependsOn": null },
+        { "name": "playwright", "agent": "run-playwright", "status": "pending", "dependsOn": "build" },
         { "name": "test", "agent": "write-tests", "status": "pending", "dependsOn": "build" },
         { "name": "typecheck", "agent": "run-typecheck", "status": "pending", "dependsOn": "test" },
         { "name": "lint", "agent": "run-lint", "status": "pending", "dependsOn": "typecheck" }
