@@ -11,7 +11,7 @@ Read `appDir` from the feature file with `jq -r '.appDir' $FEATURE_FILE`. All re
 
 Run `jq '[.userStories[] | {id, passes, jobs: [.jobs[] | {name, status, dependsOn}]}]' $FEATURE_FILE` to check status.
 
-1. If all userStories have `passes: true`, output `<Promise>COMPLETED</Promise>`
+1. If all userStories have `passes: true`, output `<promise>RALPH-LOOP-COMPLETED</promise>`
 2. Find the first story where `passes: false`
 3. Find runnable jobs: A job is runnable when its own status is `"pending"` AND (`dependsOn` is null OR the dependency job's status is `"done"`), **except**: the `playwright` job is runnable when its own status is `"pending"` AND the `build` job's status is `"generated"`. All other jobs continue to gate on `"done"`.
 4. Invoke each runnable job's agent in parallel via Task tool (read the full story data with `jq '.userStories[INDEX]' $FEATURE_FILE` to pass to each). **Include both the feature file path and the app directory in each agent's prompt** so the agent knows which file to update and where the application code lives.
