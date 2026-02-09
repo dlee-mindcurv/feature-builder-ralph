@@ -28,3 +28,4 @@ example/src/__e2e__/
 example/test-results/
 __e2e__
 /.claude/settings.local.json
+/.claude/ralph-loop.local.md

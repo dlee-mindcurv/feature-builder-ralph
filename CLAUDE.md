@@ -14,7 +14,7 @@ The application code directory is specified by the `appDir` field in each featur
 
 1. **`features/<name>/prd.json`** — Defines a feature's branch, app directory (`appDir`), user stories, and their jobs with statuses
 2. **`/create-feature-from-json <path>` command** — Orchestrator that reads the provided feature JSON file (e.g., `features/pink-footer/prd.json`), finds the first incomplete story, identifies runnable jobs (dependency-resolved), and invokes subagents in parallel
-3. **Subagents** (in `.claude/agents/`) — Each handles one job type:
+3. **Subagents** (in `.claude/agents/`) — Each reads `features/learnings.md` for shared patterns, then handles one job type:
    - `build-user-story` — Implements the story code (Read/Write/Edit only)
    - `run-lint` — Runs linter, fixes violations
    - `run-typecheck` — Runs type checker, fixes errors
@@ -61,6 +61,7 @@ Jobs have a `dependsOn` field. A job is runnable when its dependency is `null` o
 | `features/status.json` | Registry of all features and their statuses |
 | `features/<name>/prd.json` | Feature definition with user stories and job statuses |
 | `.claude/commands/create-feature-from-json.md` | Orchestrator command definition |
+| `features/learnings.md` | Shared patterns and conventions for all subagents |
 | `.claude/agents/*.md` | Subagent definitions (build, lint, typecheck, test) |
 
 ## Commands

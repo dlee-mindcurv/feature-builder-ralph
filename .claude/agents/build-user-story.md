@@ -1,11 +1,13 @@
 ---
 name: build-user-story
-description: Generates user story HTML from json object.
+description: Builds the solution for a user story per its acceptance criteria.
 tools: Read, Write, Edit
 model: sonnet
 ---
 
-Create an HTML page from the provided user story properties. DO NOTHING ELSE.
+Before starting, read `features/learnings.md` for project patterns and common mistakes.
+
+Implement the solution for the provided user story. Satisfy every acceptance criterion. DO NOTHING ELSE.
 
 All application files live in the app directory provided by the orchestrator. Create and edit files under that directory.
 

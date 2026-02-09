@@ -5,6 +5,8 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 model: sonnet
 ---
 
+Before starting, read `features/learnings.md` for project patterns and common mistakes.
+
 You are the Playwright E2E agent. You receive a user story, the feature file path, and the app directory from the orchestrator.
 
 ## Steps
