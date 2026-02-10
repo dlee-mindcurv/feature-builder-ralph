@@ -149,18 +149,76 @@ npm run test:watch   # Run Vitest in watch mode
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
 - `jq` (used by the orchestrator to parse feature JSON)
 
-### Setup
+### Quick Start with `ralph` CLI
+
+The easiest way to use Ralph is the portable `ralph` script. Copy it into any project:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dlee-mindcurv/cc-automation-tools/main/ralph -o ralph && chmod +x ralph
+```
+
+Then:
+
+```bash
+./ralph doctor                              # Check prerequisites
+./ralph init my-feature --app-dir src       # Scaffold a feature
+# Edit features/my-feature/prd.json with your stories and acceptance criteria
+./ralph run my-feature                      # Build the feature
+./ralph status                              # Check progress
+```
+
+### `ralph` Commands
+
+```
+./ralph <command> [options]
+./ralph <feature-name>              Shorthand for: ./ralph run <feature-name>
+
+COMMANDS:
+  run <feature>       Run the Ralph loop to implement a feature
+  init <feature>      Scaffold a new feature with template prd.json
+  status [feature]    Show feature progress (all features if omitted)
+  reset <feature>     Reset all job statuses to pending
+  logs <feature>      View agent execution log
+  install             Download agents and commands from GitHub
+  update              Force re-download latest agent/command versions
+  clean               Remove downloaded agents and commands
+  doctor              Check all prerequisites and system health
+  self-update         Update the ralph script itself
+  help                Show help text
+```
+
+The `run` command accepts smart feature arguments:
+
+```bash
+./ralph run pink-footer                     # Resolves to features/pink-footer/prd.json
+./ralph run features/pink-footer/prd.json   # Used as-is
+./ralph pink-footer                         # Shorthand for: run pink-footer
+```
+
+Run options:
+
+| Option | Description |
+|--------|-------------|
+| `--max-iterations <n>` | Safety limit (default: 50) |
+| `--dry-run` | Show claude command without executing |
+| `--verbose` | Detailed output |
+| `--model <model>` | Override Claude model |
+| `--resume` | Resume last Claude session |
+| `--skip-install` | Don't auto-install agents |
+| `--dangerously-skip-permissions` | Pass through to claude CLI |
+
+### Manual Setup
+
+If you prefer not to use the `ralph` script, you can set up manually:
 
 ```bash
 # Clone the repo
 git clone <repo-url>
-cd ralph-native-with-subagents
+cd feature-builder
 
 # Install application dependencies
 cd example && npm install
 ```
-
-### Creating a Feature
 
 1. Create a feature directory and `prd.json`:
 
@@ -178,18 +236,13 @@ mkdir -p features/my-feature
 
 4. The orchestrator dispatches subagents to implement, test, type-check, and lint the feature automatically.
 
-### Running with Ralph Wiggum
+### Running with Ralph Wiggum (Manual)
 
-For features with multiple user stories, the orchestrator processes one story per invocation. The **Ralph Wiggum loop** re-invokes the orchestrator automatically until all stories pass, so you don't have to manually re-run the command.
+For features with multiple user stories, the orchestrator processes one story per invocation. The **Ralph Wiggum loop** re-invokes the orchestrator automatically until all stories pass. The `ralph` CLI handles this automatically, but you can also invoke it directly:
 
 ```
-/ralph-wiggum:ralph-loop "/create-feature-from-json features/<name>/prd.json" --completion-promise "COMPLETED"
+/ralph-wiggum:ralph-loop "/create-feature-from-json features/<name>/prd.json" --completion-promise "RALPH-LOOP-COMPLETED" --max-iterations 50
 ```
-
-**Key options:**
-
-- `--completion-promise "COMPLETED"` (required) — stops the loop when the orchestrator outputs `<Promise>COMPLETED</Promise>`
-- `--max-iterations <n>` (optional) — safety limit on the number of iterations to prevent runaway loops
 
 **To cancel a running loop:**
 
@@ -197,7 +250,49 @@ For features with multiple user stories, the orchestrator processes one story pe
 /ralph-wiggum:cancel-ralph
 ```
 
-> **Prerequisite:** The [Ralph Wiggum](https://github.com/dlee-mindcurv/ralph-wiggum) plugin must be installed in your Claude Code environment.
+> **Prerequisite:** The [Ralph Wiggum](https://github.com/dlee-mindcurv/ralph-wiggum) plugin must be installed in your Claude Code environment. The `ralph` CLI auto-installs it if missing.
+
+## Testing
+
+Ralph includes a [bats](https://github.com/bats-core/bats-core) test suite covering all CLI commands, utility functions, and edge cases.
+
+### Prerequisites
+
+```bash
+brew install bats-core
+```
+
+The bats helper libraries (`bats-support` and `bats-assert`) are vendored in `tests/test_helper/` and don't need separate installation.
+
+### Running Tests
+
+```bash
+bats tests/                     # All tests (~94)
+bats tests/ralph_cli.bats      # Single file
+bats -j 4 tests/               # Parallel execution
+```
+
+### Test Structure
+
+```
+tests/
+├── helpers/
+│   └── setup.bash              # Shared setup/teardown, mock helpers
+├── fixtures/                   # JSON fixtures for features and logs
+├── test_helper/                # Vendored bats-support and bats-assert
+├── ralph_functions.bats        # Unit tests: resolve_feature_file, colors, constants
+├── ralph_cli.bats              # --version, --help, --no-color, unknown cmd, smart shorthand
+├── ralph_init.bats             # init with all option combos, duplicate rejection
+├── ralph_status.bats           # Single/all features, done/pending/mixed progress
+├── ralph_reset.bats            # Reset jobs, remove agent-log, edge cases
+├── ralph_logs.bats             # Log table display, empty/missing log
+├── ralph_clean.bats            # File removal, correct count reporting
+├── ralph_run.bats              # --dry-run, validation errors, option pass-through
+├── ralph_doctor.bats           # Tool checks, missing tool, agent/CLAUDE.md checks
+└── ralph_install.bats          # Install/update with mocked curl, skip-existing behavior
+```
+
+Tests run in isolated temp directories and use mocked external dependencies (`curl`, `claude`), so no network calls or real Claude sessions are needed.
 
 ## License
 

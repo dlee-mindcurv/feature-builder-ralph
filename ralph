@@ -1,0 +1,927 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# =============================================================================
+# ralph — Portable CLI for the Ralph feature-builder system
+# Downloads agents/commands and drives Claude Code subagent workflows
+# =============================================================================
+
+RALPH_VERSION="1.0.0"
+
+# GitHub source for agents and commands
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/dlee-mindcurv/cc-automation-tools/main/feature-builder"
+
+# Files to download
+AGENT_FILES="build-user-story.md run-lint.md run-playwright.md run-typecheck.md write-tests.md"
+COMMAND_FILES="create-feature-from-json.md"
+
+# Directories
+AGENTS_DIR=".claude/agents"
+COMMANDS_DIR=".claude/commands"
+FEATURES_DIR="features"
+
+# Defaults
+DEFAULT_MAX_ITERATIONS=50
+COMPLETION_PROMISE="RALPH-LOOP-COMPLETED"
+
+# =============================================================================
+# Color & Output Utilities
+# =============================================================================
+
+_use_color=true
+_verbose=false
+
+setup_colors() {
+  if [[ "${NO_COLOR:-}" != "" ]] || [[ "$_use_color" == "false" ]]; then
+    RED=""
+    GREEN=""
+    YELLOW=""
+    BLUE=""
+    CYAN=""
+    MAGENTA=""
+    DIM=""
+    BOLD=""
+    RESET=""
+  else
+    RED=$'\033[0;31m'
+    GREEN=$'\033[0;32m'
+    YELLOW=$'\033[0;33m'
+    BLUE=$'\033[0;34m'
+    CYAN=$'\033[0;36m'
+    MAGENTA=$'\033[0;35m'
+    DIM=$'\033[2m'
+    BOLD=$'\033[1m'
+    RESET=$'\033[0m'
+  fi
+}
+
+info()    { printf "${BLUE}info${RESET}  %s\n" "$*"; }
+success() { printf "${GREEN}ok${RESET}    %s\n" "$*"; }
+warn()    { printf "${YELLOW}warn${RESET}  %s\n" "$*" >&2; }
+error()   { printf "${RED}error${RESET} %s\n" "$*" >&2; }
+debug()   { [[ "$_verbose" == "true" ]] && printf "${DIM}debug %s${RESET}\n" "$*" || true; }
+
+die() {
+  error "$@"
+  exit 1
+}
+
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
+resolve_feature_file() {
+  local input="$1"
+  if [[ "$input" == *.json ]]; then
+    echo "$input"
+  elif [[ "$input" == */* ]]; then
+    echo "${input}/prd.json"
+  else
+    echo "${FEATURES_DIR}/${input}/prd.json"
+  fi
+}
+
+feature_dir_from_file() {
+  local ffile="$1"
+  dirname "$ffile"
+}
+
+require_jq() {
+  command -v jq >/dev/null 2>&1 || die "jq is required but not installed. Install it: brew install jq"
+}
+
+require_curl() {
+  command -v curl >/dev/null 2>&1 || die "curl is required but not installed."
+}
+
+require_claude() {
+  command -v claude >/dev/null 2>&1 || die "claude CLI is required but not installed. See: https://docs.anthropic.com/en/docs/claude-code"
+}
+
+# =============================================================================
+# doctor Command
+# =============================================================================
+
+cmd_doctor() {
+  local all_ok=true
+
+  printf "\n${BOLD}Ralph Doctor${RESET} — checking prerequisites\n\n"
+
+  # Check required tools
+  local tools="claude jq curl node npm"
+  for tool in $tools; do
+    if command -v "$tool" >/dev/null 2>&1; then
+      local ver=""
+      case "$tool" in
+        node) ver="$(node --version 2>/dev/null || true)" ;;
+        npm)  ver="$(npm --version 2>/dev/null || true)" ;;
+        jq)   ver="$(jq --version 2>/dev/null || true)" ;;
+        claude) ver="$(claude --version 2>/dev/null | head -1 || true)" ;;
+        curl) ver="$(curl --version 2>/dev/null | head -1 || true)" ;;
+      esac
+      printf "  ${GREEN}✓${RESET} %-10s %s\n" "$tool" "${DIM}${ver}${RESET}"
+    else
+      printf "  ${RED}✗${RESET} %-10s not found\n" "$tool"
+      all_ok=false
+    fi
+  done
+
+  echo ""
+
+  # Check ralph-wiggum plugin
+  if command -v claude >/dev/null 2>&1; then
+    if claude plugin list 2>&1 | grep -q "ralph-wiggum"; then
+      printf "  ${GREEN}✓${RESET} ralph-wiggum plugin installed\n"
+    else
+      printf "  ${YELLOW}!${RESET} ralph-wiggum plugin not installed\n"
+      info "Installing ralph-wiggum plugin..."
+      if claude plugin install ralph-wiggum 2>/dev/null; then
+        success "ralph-wiggum plugin installed"
+      else
+        warn "Could not auto-install ralph-wiggum plugin"
+        warn "Install manually: claude plugin install ralph-wiggum"
+        all_ok=false
+      fi
+    fi
+  fi
+
+  echo ""
+
+  # Check .claude directory
+  if [[ -d "$AGENTS_DIR" ]]; then
+    local agent_count=0
+    for f in $AGENT_FILES; do
+      [[ -f "${AGENTS_DIR}/${f}" ]] && agent_count=$((agent_count + 1))
+    done
+    printf "  ${GREEN}✓${RESET} .claude/agents/ — %d/%d agents installed\n" "$agent_count" "$(echo $AGENT_FILES | wc -w | tr -d ' ')"
+  else
+    printf "  ${DIM}-${RESET} .claude/agents/ — not found (run: ./ralph install)\n"
+  fi
+
+  if [[ -d "$COMMANDS_DIR" ]]; then
+    local cmd_count=0
+    for f in $COMMAND_FILES; do
+      [[ -f "${COMMANDS_DIR}/${f}" ]] && cmd_count=$((cmd_count + 1))
+    done
+    printf "  ${GREEN}✓${RESET} .claude/commands/ — %d/%d commands installed\n" "$cmd_count" "$(echo $COMMAND_FILES | wc -w | tr -d ' ')"
+  else
+    printf "  ${DIM}-${RESET} .claude/commands/ — not found (run: ./ralph install)\n"
+  fi
+
+  # Check features directory
+  if [[ -d "$FEATURES_DIR" ]]; then
+    local feature_count=0
+    for d in "$FEATURES_DIR"/*/; do
+      [[ -f "${d}prd.json" ]] && feature_count=$((feature_count + 1))
+    done
+    printf "  ${GREEN}✓${RESET} features/ — %d feature(s) found\n" "$feature_count"
+  else
+    printf "  ${DIM}-${RESET} features/ — not found\n"
+  fi
+
+  # Check CLAUDE.md
+  if [[ -f "CLAUDE.md" ]]; then
+    printf "  ${GREEN}✓${RESET} CLAUDE.md found\n"
+  else
+    printf "  ${YELLOW}!${RESET} CLAUDE.md not found (recommended for project context)\n"
+  fi
+
+  echo ""
+
+  if [[ "$all_ok" == "true" ]]; then
+    success "All checks passed"
+  else
+    warn "Some checks failed — see above"
+  fi
+  echo ""
+}
+
+# =============================================================================
+# install / update Commands
+# =============================================================================
+
+download_file() {
+  local url="$1"
+  local dest="$2"
+  local skip_existing="${3:-false}"
+
+  if [[ "$skip_existing" == "true" ]] && [[ -f "$dest" ]]; then
+    debug "Skipping existing: $dest"
+    return 0
+  fi
+
+  debug "Downloading: $url → $dest"
+  local dir
+  dir="$(dirname "$dest")"
+  mkdir -p "$dir"
+
+  if curl -fsSL "$url" -o "$dest" 2>/dev/null; then
+    debug "Downloaded: $dest"
+    return 0
+  else
+    error "Failed to download: $url"
+    return 1
+  fi
+}
+
+cmd_install() {
+  local skip_existing=true
+  cmd_install_inner "$skip_existing"
+}
+
+cmd_update() {
+  local skip_existing=false
+  info "Force re-downloading all files..."
+  cmd_install_inner "$skip_existing"
+}
+
+cmd_install_inner() {
+  local skip_existing="$1"
+
+  require_curl
+
+  info "Installing agents and commands..."
+
+  local failed=false
+
+  # Download agents
+  for f in $AGENT_FILES; do
+    if ! download_file "${GITHUB_RAW_BASE}/agents/${f}" "${AGENTS_DIR}/${f}" "$skip_existing"; then
+      failed=true
+    fi
+  done
+
+  # Download commands
+  for f in $COMMAND_FILES; do
+    if ! download_file "${GITHUB_RAW_BASE}/commands/${f}" "${COMMANDS_DIR}/${f}" "$skip_existing"; then
+      failed=true
+    fi
+  done
+
+  # Ensure learnings.md exists
+  if [[ ! -f "${FEATURES_DIR}/learnings.md" ]]; then
+    mkdir -p "$FEATURES_DIR"
+    cat > "${FEATURES_DIR}/learnings.md" <<'LEARNINGS'
+# Shared Learnings
+
+Discoveries and insights recorded by subagents during feature implementation. Agents should append findings here that would help future agent runs.
+
+## Findings
+
+(none yet)
+LEARNINGS
+    debug "Created features/learnings.md"
+  fi
+
+  # Store version marker
+  mkdir -p .claude
+  echo "$RALPH_VERSION" > .claude/.ralph-version
+
+  if [[ "$failed" == "true" ]]; then
+    warn "Some downloads failed — check network and try again"
+    return 1
+  fi
+
+  success "Installed $(echo $AGENT_FILES | wc -w | tr -d ' ') agents and $(echo $COMMAND_FILES | wc -w | tr -d ' ') command(s)"
+}
+
+# =============================================================================
+# init Command
+# =============================================================================
+
+cmd_init() {
+  local name=""
+  local app_dir="."
+  local project=""
+  local branch=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --app-dir)  app_dir="$2"; shift 2 ;;
+      --project)  project="$2"; shift 2 ;;
+      --branch)   branch="$2"; shift 2 ;;
+      -*)         die "Unknown init option: $1" ;;
+      *)
+        if [[ -z "$name" ]]; then
+          name="$1"
+        else
+          die "Unexpected argument: $1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  [[ -z "$name" ]] && die "Usage: ralph init <feature-name> [--app-dir <dir>] [--project <name>] [--branch <name>]"
+
+  [[ -z "$project" ]] && project="$(basename "$(pwd)")"
+  [[ -z "$branch" ]] && branch="feature/${name}"
+
+  local feature_dir="${FEATURES_DIR}/${name}"
+  local feature_file="${feature_dir}/prd.json"
+
+  if [[ -f "$feature_file" ]]; then
+    die "Feature already exists: $feature_file"
+  fi
+
+  mkdir -p "$feature_dir"
+
+  cat > "$feature_file" <<TEMPLATE
+{
+  "project": "${project}",
+  "appDir": "${app_dir}",
+  "branchName": "${branch}",
+  "description": "TODO: Describe the feature",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "TODO: Story title",
+      "description": "As a user, I want ... so that ...",
+      "acceptanceCriteria": [
+        "TODO: First acceptance criterion",
+        "TODO: Second acceptance criterion"
+      ],
+      "priority": 1,
+      "model": "sonnet",
+      "passes": false,
+      "notes": "",
+      "jobs": [
+        { "name": "build", "agent": "build-user-story", "status": "pending", "dependsOn": null, "notes": "" },
+        { "name": "playwright", "agent": "run-playwright", "status": "pending", "dependsOn": "build", "notes": "" },
+        { "name": "test", "agent": "write-tests", "status": "pending", "dependsOn": "build", "notes": "" },
+        { "name": "typecheck", "agent": "run-typecheck", "status": "pending", "dependsOn": "test", "notes": "" },
+        { "name": "lint", "agent": "run-lint", "status": "pending", "dependsOn": "typecheck", "notes": "" }
+      ]
+    }
+  ]
+}
+TEMPLATE
+
+  success "Created $feature_file"
+  info "Edit the file to add your user stories and acceptance criteria"
+  info "Then run: ./ralph run ${name}"
+}
+
+# =============================================================================
+# status Command
+# =============================================================================
+
+cmd_status() {
+  require_jq
+
+  if [[ $# -eq 0 ]]; then
+    # Show all features
+    local found=false
+    for prd in "$FEATURES_DIR"/*/prd.json; do
+      [[ -f "$prd" ]] || continue
+      found=true
+      show_feature_status "$prd"
+      echo ""
+    done
+    if [[ "$found" == "false" ]]; then
+      info "No features found in ${FEATURES_DIR}/"
+    fi
+  else
+    local feature_file
+    feature_file="$(resolve_feature_file "$1")"
+    [[ -f "$feature_file" ]] || die "Feature file not found: $feature_file"
+    show_feature_status "$feature_file"
+  fi
+}
+
+show_feature_status() {
+  local feature_file="$1"
+  local feature_dir
+  feature_dir="$(feature_dir_from_file "$feature_file")"
+  local feature_name
+  feature_name="$(basename "$feature_dir")"
+
+  local description
+  description="$(jq -r '.description // ""' "$feature_file")"
+
+  printf "${BOLD}${MAGENTA}%s${RESET}" "$feature_name"
+  [[ -n "$description" ]] && printf " — ${DIM}%s${RESET}" "$description"
+  echo ""
+
+  local total_stories
+  total_stories="$(jq '.userStories | length' "$feature_file")"
+  local passing_stories
+  passing_stories="$(jq '[.userStories[] | select(.passes == true)] | length' "$feature_file")"
+
+  # Iterate stories using index (bash 3.2 compatible)
+  local i=0
+  while [[ $i -lt $total_stories ]]; do
+    local story_id story_title story_passes
+    story_id="$(jq -r ".userStories[$i].id" "$feature_file")"
+    story_title="$(jq -r ".userStories[$i].title" "$feature_file")"
+    story_passes="$(jq -r ".userStories[$i].passes" "$feature_file")"
+
+    if [[ "$story_passes" == "true" ]]; then
+      printf "  ${GREEN}PASS${RESET} %s: %s\n" "$story_id" "$story_title"
+    else
+      printf "  ${YELLOW}WIP ${RESET} %s: %s\n" "$story_id" "$story_title"
+    fi
+
+    # Show jobs
+    local num_jobs
+    num_jobs="$(jq ".userStories[$i].jobs | length" "$feature_file")"
+    local j=0
+    while [[ $j -lt $num_jobs ]]; do
+      local job_name job_status
+      job_name="$(jq -r ".userStories[$i].jobs[$j].name" "$feature_file")"
+      job_status="$(jq -r ".userStories[$i].jobs[$j].status" "$feature_file")"
+
+      local status_color="$DIM"
+      case "$job_status" in
+        done)      status_color="$GREEN" ;;
+        generated) status_color="$CYAN" ;;
+        pending)   status_color="$DIM" ;;
+        skipped)   status_color="$DIM" ;;
+        *)         status_color="$YELLOW" ;;
+      esac
+
+      printf "       ${status_color}%-12s %s${RESET}\n" "$job_name" "$job_status"
+      j=$((j + 1))
+    done
+
+    i=$((i + 1))
+  done
+
+  printf "\n  ${BOLD}%d/%d stories complete${RESET}\n" "$passing_stories" "$total_stories"
+}
+
+# =============================================================================
+# reset Command
+# =============================================================================
+
+cmd_reset() {
+  [[ $# -eq 0 ]] && die "Usage: ralph reset <feature>"
+
+  require_jq
+
+  local feature_file
+  feature_file="$(resolve_feature_file "$1")"
+  [[ -f "$feature_file" ]] || die "Feature file not found: $feature_file"
+
+  local feature_dir
+  feature_dir="$(feature_dir_from_file "$feature_file")"
+
+  # Reset all job statuses to pending and passes to false
+  local tmp
+  tmp="$(mktemp)"
+  jq '
+    .userStories = [.userStories[] | .passes = false | .jobs = [.jobs[] | .status = "pending"]]
+  ' "$feature_file" > "$tmp" && mv "$tmp" "$feature_file"
+
+  # Remove agent log for clean restart
+  local log_file="${feature_dir}/agent-log.json"
+  if [[ -f "$log_file" ]]; then
+    rm "$log_file"
+    debug "Removed $log_file"
+  fi
+
+  success "Reset all statuses in $feature_file"
+}
+
+# =============================================================================
+# logs Command
+# =============================================================================
+
+cmd_logs() {
+  [[ $# -eq 0 ]] && die "Usage: ralph logs <feature>"
+
+  require_jq
+
+  local feature_file
+  feature_file="$(resolve_feature_file "$1")"
+  local feature_dir
+  feature_dir="$(feature_dir_from_file "$feature_file")"
+  local log_file="${feature_dir}/agent-log.json"
+
+  if [[ ! -f "$log_file" ]]; then
+    info "No agent log found at $log_file"
+    return 0
+  fi
+
+  local count
+  count="$(jq 'length' "$log_file")"
+
+  if [[ "$count" -eq 0 ]]; then
+    info "Agent log is empty"
+    return 0
+  fi
+
+  printf "\n${BOLD}%-8s %-12s %-20s %-10s %-6s %s${RESET}\n" "Story" "Job" "Agent" "Status" "Iters" "Time"
+  printf "%s\n" "-------  -----------  -------------------  ---------  -----  ----"
+
+  local i=0
+  while [[ $i -lt $count ]]; do
+    local story_id job agent status iterations started finished
+    story_id="$(jq -r ".[$i].storyId // \"-\"" "$log_file")"
+    job="$(jq -r ".[$i].job // \"-\"" "$log_file")"
+    agent="$(jq -r ".[$i].agent // \"-\"" "$log_file")"
+    status="$(jq -r ".[$i].status // \"-\"" "$log_file")"
+    iterations="$(jq -r ".[$i].iterations // \"-\"" "$log_file")"
+    started="$(jq -r ".[$i].startedAt // \"-\"" "$log_file")"
+    finished="$(jq -r ".[$i].finishedAt // \"-\"" "$log_file")"
+
+    local time_str="-"
+    if [[ "$started" != "-" ]] && [[ "$finished" != "-" ]] && [[ "$started" != "null" ]] && [[ "$finished" != "null" ]]; then
+      # Try to compute duration (may not work on all systems)
+      if command -v python3 >/dev/null 2>&1; then
+        time_str="$(python3 -c "
+from datetime import datetime
+try:
+    s = datetime.fromisoformat('${started}'.replace('Z','+00:00'))
+    e = datetime.fromisoformat('${finished}'.replace('Z','+00:00'))
+    d = int((e - s).total_seconds())
+    m, sec = divmod(d, 60)
+    print(f'{m}m{sec}s' if m else f'{sec}s')
+except:
+    print('-')
+" 2>/dev/null || echo "-")"
+      fi
+    fi
+
+    local status_color="$DIM"
+    case "$status" in
+      success) status_color="$GREEN" ;;
+      failure) status_color="$RED" ;;
+    esac
+
+    printf "%-8s %-12s %-20s ${status_color}%-10s${RESET} %-6s %s\n" \
+      "$story_id" "$job" "$agent" "$status" "$iterations" "$time_str"
+    i=$((i + 1))
+  done
+  echo ""
+}
+
+# =============================================================================
+# run Command
+# =============================================================================
+
+cmd_run() {
+  local feature_input=""
+  local max_iterations=$DEFAULT_MAX_ITERATIONS
+  local dry_run=false
+  local model=""
+  local resume=false
+  local skip_install=false
+  local dangerously_skip_permissions=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --max-iterations) max_iterations="$2"; shift 2 ;;
+      --dry-run)        dry_run=true; shift ;;
+      --model)          model="$2"; shift 2 ;;
+      --resume)         resume=true; shift ;;
+      --skip-install)   skip_install=true; shift ;;
+      --dangerously-skip-permissions) dangerously_skip_permissions=true; shift ;;
+      --verbose)        _verbose=true; shift ;;
+      -*)               die "Unknown run option: $1" ;;
+      *)
+        if [[ -z "$feature_input" ]]; then
+          feature_input="$1"
+        else
+          die "Unexpected argument: $1"
+        fi
+        shift
+        ;;
+    esac
+  done
+
+  [[ -z "$feature_input" ]] && die "Usage: ralph run <feature> [options]"
+
+  require_jq
+  require_claude
+
+  # Resolve feature file
+  local feature_file
+  feature_file="$(resolve_feature_file "$feature_input")"
+  [[ -f "$feature_file" ]] || die "Feature file not found: $feature_file"
+
+  # Validate JSON
+  jq empty "$feature_file" 2>/dev/null || die "Invalid JSON: $feature_file"
+
+  # Read appDir
+  local app_dir
+  app_dir="$(jq -r '.appDir // ""' "$feature_file")"
+  [[ -z "$app_dir" ]] && die "No appDir specified in $feature_file"
+  [[ -d "$app_dir" ]] || die "App directory not found: $app_dir"
+
+  # Auto-install agents if missing
+  if [[ "$skip_install" == "false" ]]; then
+    local missing=false
+    for f in $AGENT_FILES; do
+      [[ -f "${AGENTS_DIR}/${f}" ]] || { missing=true; break; }
+    done
+    for f in $COMMAND_FILES; do
+      [[ -f "${COMMANDS_DIR}/${f}" ]] || { missing=true; break; }
+    done
+    if [[ "$missing" == "true" ]]; then
+      info "Some agents/commands missing — installing..."
+      cmd_install
+    fi
+  fi
+
+  # Auto-install ralph-wiggum plugin if missing
+  if command -v claude >/dev/null 2>&1; then
+    if ! claude plugin list 2>&1 | grep -q "ralph-wiggum"; then
+      info "Installing ralph-wiggum plugin..."
+      claude plugin install ralph-wiggum 2>/dev/null || warn "Could not auto-install ralph-wiggum plugin"
+    fi
+  fi
+
+  # Ensure learnings.md exists
+  if [[ ! -f "${FEATURES_DIR}/learnings.md" ]]; then
+    mkdir -p "$FEATURES_DIR"
+    cat > "${FEATURES_DIR}/learnings.md" <<'LEARNINGS'
+# Shared Learnings
+
+Discoveries and insights recorded by subagents during feature implementation. Agents should append findings here that would help future agent runs.
+
+## Findings
+
+(none yet)
+LEARNINGS
+  fi
+
+  # Warn if no CLAUDE.md
+  if [[ ! -f "CLAUDE.md" ]]; then
+    warn "No CLAUDE.md found — Claude will lack project context"
+  fi
+
+  # Clean stale state file from crashed sessions
+  if [[ -f ".claude/ralph-loop.local.md" ]]; then
+    rm ".claude/ralph-loop.local.md"
+    debug "Cleaned stale .claude/ralph-loop.local.md"
+  fi
+
+  # Read feature metadata for banner
+  local description
+  description="$(jq -r '.description // ""' "$feature_file")"
+  local total_stories
+  total_stories="$(jq '.userStories | length' "$feature_file")"
+  local passing_stories
+  passing_stories="$(jq '[.userStories[] | select(.passes == true)] | length' "$feature_file")"
+
+  # Pre-run summary banner
+  echo ""
+  printf "${BOLD}${MAGENTA}Ralph${RESET} v${RALPH_VERSION}\n"
+  echo "─────────────────────────────────────────"
+  printf "  Feature:    ${BOLD}%s${RESET}\n" "$(basename "$(feature_dir_from_file "$feature_file")")"
+  [[ -n "$description" ]] && printf "  Description: %s\n" "$description"
+  printf "  App dir:    %s\n" "$app_dir"
+  printf "  Progress:   %d/%d stories\n" "$passing_stories" "$total_stories"
+  printf "  Max iters:  %d\n" "$max_iterations"
+  [[ -n "$model" ]] && printf "  Model:      %s\n" "$model"
+  [[ "$resume" == "true" ]] && printf "  Mode:       ${CYAN}resume${RESET}\n"
+  echo "─────────────────────────────────────────"
+  echo ""
+
+  # Build the claude command
+  local claude_args=""
+
+  if [[ -n "$model" ]]; then
+    claude_args="${claude_args} --model ${model}"
+  fi
+
+  if [[ "$resume" == "true" ]]; then
+    claude_args="${claude_args} --continue"
+  fi
+
+  if [[ "$dangerously_skip_permissions" == "true" ]]; then
+    claude_args="${claude_args} --dangerously-skip-permissions"
+  fi
+
+  local slash_command="/ralph-wiggum:ralph-loop \"/create-feature-from-json ${feature_file}\" --completion-promise \"${COMPLETION_PROMISE}\" --max-iterations ${max_iterations}"
+
+  local full_cmd="claude${claude_args} \"${slash_command}\""
+
+  if [[ "$dry_run" == "true" ]]; then
+    info "Dry run — would execute:"
+    echo ""
+    printf "  %s\n" "$full_cmd"
+    echo ""
+    return 0
+  fi
+
+  info "Launching Claude..."
+  debug "Command: $full_cmd"
+
+  # Execute claude with the slash command as positional prompt
+  # shellcheck disable=SC2086
+  claude${claude_args} "${slash_command}"
+
+  local exit_code=$?
+
+  # Post-run summary
+  echo ""
+  echo "─────────────────────────────────────────"
+
+  if [[ $exit_code -eq 0 ]]; then
+    success "Claude session completed"
+  else
+    warn "Claude exited with code $exit_code"
+  fi
+
+  echo ""
+  show_feature_status "$feature_file"
+  echo ""
+}
+
+# =============================================================================
+# self-update Command
+# =============================================================================
+
+cmd_self_update() {
+  require_curl
+
+  local script_path
+  script_path="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  local update_url="https://raw.githubusercontent.com/dlee-mindcurv/cc-automation-tools/main/ralph"
+
+  info "Downloading latest ralph..."
+
+  local tmp
+  tmp="$(mktemp)"
+
+  if curl -fsSL "$update_url" -o "$tmp" 2>/dev/null; then
+    # Verify it looks like a bash script
+    if head -1 "$tmp" | grep -q "#!/usr/bin/env bash"; then
+      chmod +x "$tmp"
+      mv "$tmp" "$script_path"
+      success "Updated ralph to latest version"
+    else
+      rm -f "$tmp"
+      die "Downloaded file doesn't look like a valid ralph script"
+    fi
+  else
+    rm -f "$tmp"
+    die "Failed to download update from $update_url"
+  fi
+}
+
+# =============================================================================
+# clean Command
+# =============================================================================
+
+cmd_clean() {
+  local removed=0
+
+  for f in $AGENT_FILES; do
+    if [[ -f "${AGENTS_DIR}/${f}" ]]; then
+      rm "${AGENTS_DIR}/${f}"
+      removed=$((removed + 1))
+    fi
+  done
+
+  for f in $COMMAND_FILES; do
+    if [[ -f "${COMMANDS_DIR}/${f}" ]]; then
+      rm "${COMMANDS_DIR}/${f}"
+      removed=$((removed + 1))
+    fi
+  done
+
+  if [[ -f ".claude/.ralph-version" ]]; then
+    rm ".claude/.ralph-version"
+  fi
+
+  success "Removed $removed file(s)"
+}
+
+# =============================================================================
+# help Command
+# =============================================================================
+
+cmd_help() {
+  cat <<HELP
+${BOLD}Ralph${RESET} v${RALPH_VERSION} — Portable CLI for subagent-driven feature development
+
+${BOLD}USAGE${RESET}
+  ./ralph <command> [options]
+  ./ralph <feature-name>              Shorthand for: ./ralph run <feature-name>
+
+${BOLD}COMMANDS${RESET}
+  run <feature>       Run the Ralph loop to implement a feature
+  init <feature>      Scaffold a new feature with template prd.json
+  status [feature]    Show feature progress (all features if omitted)
+  reset <feature>     Reset all job statuses to pending
+  logs <feature>      View agent execution log
+  install             Download agents and commands from GitHub
+  update              Force re-download latest agent/command versions
+  clean               Remove downloaded agents and commands
+  doctor              Check all prerequisites and system health
+  self-update         Update the ralph script itself
+  help                Show this help text
+
+${BOLD}SMART FEATURE ARGUMENT${RESET}
+  ./ralph run pink-footer                    Resolves to features/pink-footer/prd.json
+  ./ralph run features/pink-footer/prd.json  Used as-is
+  ./ralph pink-footer                        Shorthand for: run pink-footer
+
+${BOLD}RUN OPTIONS${RESET}
+  --max-iterations <n>                Safety limit (default: 50)
+  --dry-run                           Show claude command without executing
+  --verbose                           Detailed output
+  --model <model>                     Override Claude model
+  --resume                            Resume last Claude session (--continue)
+  --skip-install                      Don't auto-install agents
+  --dangerously-skip-permissions      Pass through to claude CLI
+
+${BOLD}INIT OPTIONS${RESET}
+  --app-dir <dir>     Application directory (default: ".")
+  --project <name>    Project name (default: directory basename)
+  --branch <name>     Git branch (default: feature/<name>)
+
+${BOLD}GLOBAL OPTIONS${RESET}
+  --no-color          Disable colored output
+  --version           Show version
+  -h, --help          Show this help text
+  --verbose           Enable debug output
+
+${BOLD}EXAMPLES${RESET}
+  ./ralph doctor                              Check prerequisites
+  ./ralph init my-feature --app-dir src       Scaffold a new feature
+  ./ralph run my-feature                      Build the feature
+  ./ralph run my-feature --dry-run            Preview the claude command
+  ./ralph status                              Show all feature progress
+  ./ralph reset my-feature                    Reset for a fresh run
+
+${BOLD}GETTING STARTED${RESET}
+  1. ./ralph doctor                           Verify prerequisites
+  2. ./ralph init my-feature --app-dir src    Create feature definition
+  3. Edit features/my-feature/prd.json        Add stories & acceptance criteria
+  4. ./ralph run my-feature                   Launch the build
+
+HELP
+}
+
+# =============================================================================
+# Main — Argument Parsing & Routing
+# =============================================================================
+
+main() {
+  # Parse global flags first
+  local args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --no-color)  _use_color=false; shift ;;
+      --verbose)   _verbose=true; shift ;;
+      --version)   echo "ralph v${RALPH_VERSION}"; exit 0 ;;
+      -h|--help)   setup_colors; cmd_help; exit 0 ;;
+      *)           args+=("$1"); shift ;;
+    esac
+  done
+
+  setup_colors
+
+  # No arguments → help
+  if [[ ${#args[@]} -eq 0 ]]; then
+    cmd_help
+    exit 0
+  fi
+
+  local command="${args[0]}"
+  # Remove first element (bash 3.2 compatible)
+  local rest=()
+  local idx=0
+  for arg in "${args[@]}"; do
+    if [[ $idx -gt 0 ]]; then
+      rest+=("$arg")
+    fi
+    idx=$((idx + 1))
+  done
+
+  case "$command" in
+    run)         cmd_run "${rest[@]+"${rest[@]}"}" ;;
+    init)        cmd_init "${rest[@]+"${rest[@]}"}" ;;
+    status)      cmd_status "${rest[@]+"${rest[@]}"}" ;;
+    reset)       cmd_reset "${rest[@]+"${rest[@]}"}" ;;
+    logs)        cmd_logs "${rest[@]+"${rest[@]}"}" ;;
+    install)     cmd_install ;;
+    update)      cmd_update ;;
+    clean)       cmd_clean ;;
+    doctor)      cmd_doctor ;;
+    self-update) cmd_self_update ;;
+    help)        cmd_help ;;
+    *)
+      # Smart shorthand: check if it resolves to a valid feature
+      local candidate
+      candidate="$(resolve_feature_file "$command")"
+      if [[ -f "$candidate" ]]; then
+        cmd_run "$command" "${rest[@]+"${rest[@]}"}"
+      else
+        error "Unknown command: $command"
+        echo ""
+        cmd_help
+        exit 1
+      fi
+      ;;
+  esac
+}
+
+# Allow sourcing for tests without triggering main
+[[ "${RALPH_TESTING:-}" == "1" ]] && return 0 2>/dev/null || true
+
+main "$@"

@@ -20,41 +20,41 @@
       ],
       "priority": 1,
       "model": "sonnet",
-      "passes": true,
+      "passes": false,
       "notes": "",
       "jobs": [
         {
           "name": "build",
           "agent": "build-user-story",
-          "status": "done",
+          "status": "pending",
           "dependsOn": null,
           "notes": ""
         },
         {
           "name": "playwright",
           "agent": "run-playwright",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "build",
           "notes": ""
         },
         {
           "name": "test",
           "agent": "write-tests",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "build",
           "notes": ""
         },
         {
           "name": "typecheck",
           "agent": "run-typecheck",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "test",
           "notes": ""
         },
         {
           "name": "lint",
           "agent": "run-lint",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "typecheck",
           "notes": ""
         }

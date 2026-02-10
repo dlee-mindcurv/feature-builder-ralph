@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { TaskProvider } from "@/context/TaskContext";
-import Footer from "@/components/ui/Footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,7 +19,6 @@ export default function RootLayout({
         <ThemeProvider>
           <TaskProvider>
             <div className="flex-1">{children}</div>
-            <Footer />
           </TaskProvider>
         </ThemeProvider>
       </body>

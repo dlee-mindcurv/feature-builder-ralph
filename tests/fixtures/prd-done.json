@@ -1,0 +1,25 @@
+{
+  "project": "test-project",
+  "appDir": "myapp",
+  "branchName": "feature/test-done",
+  "description": "A completed feature",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Completed story",
+      "description": "A fully done story",
+      "acceptanceCriteria": ["It works"],
+      "priority": 1,
+      "model": "sonnet",
+      "passes": true,
+      "notes": "",
+      "jobs": [
+        { "name": "build", "agent": "build-user-story", "status": "done", "dependsOn": null, "notes": "" },
+        { "name": "playwright", "agent": "run-playwright", "status": "done", "dependsOn": "build", "notes": "" },
+        { "name": "test", "agent": "write-tests", "status": "done", "dependsOn": "build", "notes": "" },
+        { "name": "typecheck", "agent": "run-typecheck", "status": "done", "dependsOn": "test", "notes": "" },
+        { "name": "lint", "agent": "run-lint", "status": "done", "dependsOn": "typecheck", "notes": "" }
+      ]
+    }
+  ]
+}
