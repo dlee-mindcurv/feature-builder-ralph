@@ -46,4 +46,13 @@ In the feature file (`$FEATURE_FILE`), update the current story:
 - Set the `build` job status to `"done"`
 - Set the `playwright` job status to `"done"`
 
-Respond with a single confirmation line.
+## Logging
+
+At the very start, capture the start time via Bash: `date -u +%Y-%m-%dT%H:%M:%SZ`
+Track iterations: start at 0, increment each time you run the Playwright test command.
+When done, capture end time the same way.
+
+Respond with ONLY a JSON object (no other text):
+{"status":"success","startedAt":"<ISO>","finishedAt":"<ISO>","iterations":<N>,"error":null}
+
+On failure, set status to "failure" and error to a brief description.

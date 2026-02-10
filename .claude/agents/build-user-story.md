@@ -13,4 +13,9 @@ All application files live in the app directory provided by the orchestrator. Cr
 
 When complete, set the "build" job status to "generated" for this story in the feature file path provided by the orchestrator. Do NOT set it to "done" — the Playwright agent will promote it to "done" after visual validation.
 
-Respond with a single confirmation line.
+## Logging
+
+Respond with ONLY a JSON object (no other text):
+{"status":"success","startedAt":null,"finishedAt":null,"iterations":1,"error":null}
+
+On failure, set status to "failure" and error to a brief description.
