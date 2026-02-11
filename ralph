@@ -2,14 +2,14 @@
 set -euo pipefail
 
 # =============================================================================
-# ralph — Portable CLI for the Ralph feature-builder system
+# ralph — Portable CLI for the Ralph feature-builder-ralph system
 # Downloads agents/commands and drives Claude Code subagent workflows
 # =============================================================================
 
 RALPH_VERSION="1.0.0"
 
 # GitHub source for agents and commands
-GITHUB_RAW_BASE="https://raw.githubusercontent.com/dlee-mindcurv/cc-automation-tools/main/feature-builder"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/dlee-mindcurv/cc-automation-tools/main/feature-builder-ralph"
 
 # Files to download
 AGENT_FILES="build-user-story.md run-lint.md run-playwright.md run-typecheck.md write-tests.md"
