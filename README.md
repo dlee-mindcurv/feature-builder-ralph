@@ -214,7 +214,7 @@ If you prefer not to use the `ralph` script, you can set up manually:
 ```bash
 # Clone the repo
 git clone <repo-url>
-cd feature-builder
+cd feature-builder-ralph
 
 # Install application dependencies
 cd example && npm install
