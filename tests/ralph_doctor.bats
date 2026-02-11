@@ -20,6 +20,7 @@ setup() {
   create_mock "curl" 'echo "curl 8.0"'
   create_mock "node" 'echo "v20.0.0"'
   create_mock "npm" 'echo "10.0.0"'
+  create_mock "gh" 'echo "gh version 2.40.0"'
 }
 
 teardown() {
@@ -44,6 +45,24 @@ teardown() {
   install_agents_and_commands
   mkdir -p features
   touch CLAUDE.md
+  # Override jq mock to pass through to real jq (needed for permission check)
+  create_mock "jq" 'exec /usr/bin/jq "$@"'
+  # Override curl mock to create output files (needed for install)
+  create_mock "curl" '
+    output_file=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -o) output_file="$2"; shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    if [[ -n "$output_file" ]]; then
+      mkdir -p "$(dirname "$output_file")"
+      echo "# mock" > "$output_file"
+    fi
+  '
+  # Run install to create settings.local.json with permissions
+  ./ralph install
   run ./ralph doctor
   assert_success
   assert_output --partial "All checks passed"

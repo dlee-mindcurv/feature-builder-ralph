@@ -7,6 +7,8 @@ setup() {
   install_agents_and_commands
   # Mock claude so we never actually call it
   create_mock "claude" 'echo "mock claude: $*"'
+  # Mock npm so worktree npm ci doesn't fail
+  create_mock "npm" 'exit 0'
 }
 
 teardown() {

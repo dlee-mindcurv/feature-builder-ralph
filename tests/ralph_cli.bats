@@ -91,8 +91,9 @@ teardown() {
 exec /usr/bin/jq "$@"
 MOCK
   )"
-  # We need real jq and a mock claude
+  # We need real jq and a mock claude + npm
   create_mock "claude" 'echo "mock claude"'
+  create_mock "npm" 'exit 0'
   run ./ralph my-feature --dry-run
   assert_success
   assert_output --partial "Dry run"

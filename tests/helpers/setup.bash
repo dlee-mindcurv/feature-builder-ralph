@@ -18,6 +18,10 @@ common_setup() {
   chmod +x "${TEST_TEMP_DIR}/ralph"
   cd "$TEST_TEMP_DIR"
   export NO_COLOR=1
+
+  # Initialize a git repo so worktree operations work
+  git init -q
+  git commit -q --allow-empty -m "initial"
 }
 
 # ---------------------------------------------------------------------------
@@ -94,4 +98,14 @@ install_agents_and_commands() {
   for f in create-feature-from-json.md; do
     touch ".claude/commands/${f}"
   done
+}
+
+# ---------------------------------------------------------------------------
+# create_settings_local — create .claude/settings.local.json with permissions
+# Usage: create_settings_local '["Bash(jq:*)","Bash(custom:*)"]'
+# ---------------------------------------------------------------------------
+create_settings_local() {
+  local perms="${1:-[]}"
+  mkdir -p .claude
+  printf '{"permissions":{"allow":%s}}' "$perms" > .claude/settings.local.json
 }

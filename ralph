@@ -24,6 +24,14 @@ FEATURES_DIR="features"
 DEFAULT_MAX_ITERATIONS=50
 COMPLETION_PROMISE="RALPH-LOOP-COMPLETED"
 
+# Permissions
+SETTINGS_LOCAL=".claude/settings.local.json"
+
+REQUIRED_PERMISSIONS="Bash(*)
+Write
+Edit
+Skill(ralph-wiggum:cancel-ralph)"
+
 # =============================================================================
 # Color & Output Utilities
 # =============================================================================
@@ -98,6 +106,83 @@ require_claude() {
   command -v claude >/dev/null 2>&1 || die "claude CLI is required but not installed. See: https://docs.anthropic.com/en/docs/claude-code"
 }
 
+ensure_permissions() {
+  command -v jq >/dev/null 2>&1 || { warn "jq not found — skipping permission sync"; return 1; }
+
+  # Create skeleton if missing or empty
+  if [[ ! -s "$SETTINGS_LOCAL" ]]; then
+    mkdir -p "$(dirname "$SETTINGS_LOCAL")"
+    echo '{"permissions":{"allow":[]}}' > "$SETTINGS_LOCAL"
+  fi
+
+  # Validate existing JSON
+  if ! jq empty "$SETTINGS_LOCAL" 2>/dev/null; then
+    warn "Invalid JSON in $SETTINGS_LOCAL — recreating"
+    echo '{"permissions":{"allow":[]}}' > "$SETTINGS_LOCAL"
+  fi
+
+  # Ensure permissions.allow array exists
+  if [[ "$(jq '.permissions.allow // null' "$SETTINGS_LOCAL" 2>/dev/null)" == "null" ]]; then
+    local tmp
+    tmp="$(mktemp)"
+    jq '.permissions = (.permissions // {}) | .permissions.allow = (.permissions.allow // [])' "$SETTINGS_LOCAL" > "$tmp" && mv "$tmp" "$SETTINGS_LOCAL"
+  fi
+
+  # Build jq array from newline-delimited string
+  local jq_array=""
+  local first=true
+  while IFS= read -r perm; do
+    [[ -z "$perm" ]] && continue
+    if [[ "$first" == "true" ]]; then
+      jq_array="\"${perm}\""
+      first=false
+    else
+      jq_array="${jq_array},\"${perm}\""
+    fi
+  done <<< "$REQUIRED_PERMISSIONS"
+
+  local tmp
+  tmp="$(mktemp)"
+  if jq --argjson required "[${jq_array}]" \
+    '.permissions.allow = (.permissions.allow + ($required - .permissions.allow))' \
+    "$SETTINGS_LOCAL" > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$SETTINGS_LOCAL"
+    return 0
+  else
+    rm -f "$tmp"
+    warn "Failed to update $SETTINGS_LOCAL"
+    return 1
+  fi
+}
+
+check_permissions() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf "  ${YELLOW}!${RESET} permissions — jq not available, skipping check\n"
+    return 1
+  fi
+
+  if [[ ! -f "$SETTINGS_LOCAL" ]]; then
+    printf "  ${YELLOW}!${RESET} permissions — $SETTINGS_LOCAL not found (run: ./ralph install)\n"
+    return 1
+  fi
+
+  local missing=0
+  while IFS= read -r perm; do
+    [[ -z "$perm" ]] && continue
+    if ! jq -e --arg p "$perm" '.permissions.allow | index($p)' "$SETTINGS_LOCAL" >/dev/null 2>&1; then
+      missing=$((missing + 1))
+    fi
+  done <<< "$REQUIRED_PERMISSIONS"
+
+  if [[ $missing -eq 0 ]]; then
+    printf "  ${GREEN}✓${RESET} permissions — all required permissions present\n"
+    return 0
+  else
+    printf "  ${YELLOW}!${RESET} permissions — %d required permission(s) missing (run: ./ralph install)\n" "$missing"
+    return 1
+  fi
+}
+
 # =============================================================================
 # doctor Command
 # =============================================================================
@@ -108,7 +193,7 @@ cmd_doctor() {
   printf "\n${BOLD}Ralph Doctor${RESET} — checking prerequisites\n\n"
 
   # Check required tools
-  local tools="claude jq curl node npm"
+  local tools="claude jq curl node npm gh"
   for tool in $tools; do
     if command -v "$tool" >/dev/null 2>&1; then
       local ver=""
@@ -118,6 +203,7 @@ cmd_doctor() {
         jq)   ver="$(jq --version 2>/dev/null || true)" ;;
         claude) ver="$(claude --version 2>/dev/null | head -1 || true)" ;;
         curl) ver="$(curl --version 2>/dev/null | head -1 || true)" ;;
+        gh)   ver="$(gh --version 2>/dev/null | head -1 || true)" ;;
       esac
       printf "  ${GREEN}✓${RESET} %-10s %s\n" "$tool" "${DIM}${ver}${RESET}"
     else
@@ -144,6 +230,11 @@ cmd_doctor() {
       fi
     fi
   fi
+
+  echo ""
+
+  # Check permissions
+  check_permissions || all_ok=false
 
   echo ""
 
@@ -276,6 +367,10 @@ LEARNINGS
   # Store version marker
   mkdir -p .claude
   echo "$RALPH_VERSION" > .claude/.ralph-version
+
+  # Sync permissions
+  info "Syncing permissions..."
+  ensure_permissions && success "Permissions synced" || warn "Could not sync permissions"
 
   if [[ "$failed" == "true" ]]; then
     warn "Some downloads failed — check network and try again"
@@ -480,6 +575,20 @@ cmd_reset() {
     debug "Removed $log_file"
   fi
 
+  # Clean up worktree if it exists
+  local feature_name
+  feature_name="$(basename "$feature_dir")"
+  local worktree_dir=".worktrees/${feature_name}"
+  if [[ -d "$worktree_dir" ]]; then
+    local branch_name
+    branch_name="$(jq -r '.branchName // ""' "$feature_file")"
+    info "Removing worktree at ${worktree_dir}..."
+    git worktree remove "$worktree_dir" --force 2>/dev/null || warn "Could not remove worktree at ${worktree_dir}"
+    if [[ -n "$branch_name" ]]; then
+      git branch -D "$branch_name" 2>/dev/null || debug "Branch $branch_name not found or already deleted"
+    fi
+  fi
+
   success "Reset all statuses in $feature_file"
 }
 
@@ -609,6 +718,28 @@ cmd_run() {
   [[ -z "$app_dir" ]] && die "No appDir specified in $feature_file"
   [[ -d "$app_dir" ]] || die "App directory not found: $app_dir"
 
+  # Read branch name and set up worktree for isolation
+  local branch_name
+  branch_name="$(jq -r '.branchName // ""' "$feature_file")"
+  [[ -z "$branch_name" ]] && die "No branchName specified in $feature_file"
+
+  local feature_name
+  feature_name="$(basename "$(feature_dir_from_file "$feature_file")")"
+  local worktree_dir=".worktrees/${feature_name}"
+
+  if [[ ! -d "$worktree_dir" ]]; then
+    info "Creating worktree at ${worktree_dir} on branch ${branch_name}..."
+    git branch "$branch_name" main 2>/dev/null || true
+    git worktree add "$worktree_dir" "$branch_name"
+
+    if [[ -d "$worktree_dir/$app_dir" ]]; then
+      info "Installing dependencies in worktree..."
+      (cd "$worktree_dir/$app_dir" && npm ci)
+    fi
+  else
+    info "Using existing worktree at ${worktree_dir}"
+  fi
+
   # Auto-install agents if missing
   if [[ "$skip_install" == "false" ]]; then
     local missing=false
@@ -622,6 +753,11 @@ cmd_run() {
       info "Some agents/commands missing — installing..."
       cmd_install
     fi
+  fi
+
+  # Ensure permissions are in place
+  if [[ "$dangerously_skip_permissions" == "false" ]]; then
+    ensure_permissions || warn "Could not sync permissions"
   fi
 
   # Auto-install ralph-wiggum plugin if missing
@@ -669,8 +805,10 @@ LEARNINGS
   echo ""
   printf "${BOLD}${MAGENTA}Ralph${RESET} v${RALPH_VERSION}\n"
   echo "─────────────────────────────────────────"
-  printf "  Feature:    ${BOLD}%s${RESET}\n" "$(basename "$(feature_dir_from_file "$feature_file")")"
+  printf "  Feature:    ${BOLD}%s${RESET}\n" "$feature_name"
   [[ -n "$description" ]] && printf "  Description: %s\n" "$description"
+  printf "  Branch:     %s\n" "$branch_name"
+  printf "  Worktree:   %s\n" "$worktree_dir"
   printf "  App dir:    %s\n" "$app_dir"
   printf "  Progress:   %d/%d stories\n" "$passing_stories" "$total_stories"
   printf "  Max iters:  %d\n" "$max_iterations"
@@ -806,9 +944,9 @@ ${BOLD}COMMANDS${RESET}
   run <feature>       Run the Ralph loop to implement a feature
   init <feature>      Scaffold a new feature with template prd.json
   status [feature]    Show feature progress (all features if omitted)
-  reset <feature>     Reset all job statuses to pending
+  reset <feature>     Reset all job statuses to pending and remove worktree
   logs <feature>      View agent execution log
-  install             Download agents and commands from GitHub
+  install             Download agents/commands and sync permissions
   update              Force re-download latest agent/command versions
   clean               Remove downloaded agents and commands
   doctor              Check all prerequisites and system health

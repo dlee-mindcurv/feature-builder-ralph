@@ -23,6 +23,10 @@ The application code directory is specified by the `appDir` field in each featur
 5. When all jobs for a story are done, the story's `passes` field is set to `true`
 6. When all stories pass, the orchestrator outputs `<Promise>COMPLETED</Promise>`
 
+### Git Worktree Isolation
+
+Each feature runs in an isolated git worktree at `.worktrees/<feature-name>/` on its own branch (specified by `branchName` in `prd.json`). The `ralph` CLI creates the worktree before invoking Claude, and the orchestrator auto-detects it to override `$APP_DIR` transparently. This enables parallel feature development without file conflicts. When a feature completes, changes are committed, pushed, and a PR is created automatically.
+
 ### Job Dependencies
 
 Jobs have a `dependsOn` field. A job is runnable when its dependency is `null` or the dependency job's status is `"done"`. The orchestrator resolves these before dispatching.
@@ -41,8 +45,11 @@ Jobs have a `dependsOn` field. A job is runnable when its dependency is `null` o
 /                         # Repo root — orchestration tooling
 ├── features/             # Per-feature definitions
 │   ├── status.json       # Registry of all features and their statuses
+│   ├── learnings.md      # Ephemeral scratch pad for agent learnings (gitignored)
 │   └── <feature-name>/   # One folder per feature
 │       └── prd.json      # Feature definition (appDir, stories, job statuses)
+├── .worktrees/           # Git worktrees for parallel features (gitignored)
+│   └── <feature-name>/   # Isolated checkout on feature branch
 ├── CLAUDE.md             # This file
 ├── .claude/
 │   ├── agents/*.md       # Subagent definitions (build, lint, typecheck, test)
@@ -81,3 +88,7 @@ The orchestrator uses `jq` to parse the feature file:
 ```bash
 jq '[.userStories[] | {id, passes, jobs: [.jobs[] | {name, status, dependsOn}]}]' features/pink-footer/prd.json
 ```
+
+## Learnings
+
+Findings integrated from feature development runs. This section is automatically updated by the orchestrator when a feature completes.

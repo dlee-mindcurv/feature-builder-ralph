@@ -29,3 +29,9 @@ example/test-results/
 __e2e__
 /.claude/settings.local.json
 /.claude/ralph-loop.local.md
+
+# Git worktrees for parallel feature development
+.worktrees/
+
+# Ephemeral learnings scratch pad (durable knowledge goes in CLAUDE.md)
+features/learnings.md
