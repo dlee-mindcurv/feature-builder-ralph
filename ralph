@@ -817,6 +817,15 @@ LEARNINGS
   echo "─────────────────────────────────────────"
   echo ""
 
+  # Short-circuit: if all stories already pass, nothing to do
+  if [[ "$passing_stories" -eq "$total_stories" ]] && [[ "$total_stories" -gt 0 ]]; then
+    success "All $total_stories stories already passing — nothing to do"
+    echo ""
+    show_feature_status "$feature_file"
+    echo ""
+    return 0
+  fi
+
   # Build the claude command
   local claude_args=""
 
