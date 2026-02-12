@@ -126,3 +126,44 @@ teardown() {
   assert_failure
   assert_output --partial "Unknown run option"
 }
+
+# ---------------------------------------------------------------------------
+# Short-circuit when all stories pass
+# ---------------------------------------------------------------------------
+
+@test "run: exits immediately when all stories already pass" {
+  install_fixture "prd-done.json" "my-feature"
+  create_app_dir "myapp"
+  run ./ralph run my-feature
+  assert_success
+  assert_output --partial "already passing"
+  assert_output --partial "nothing to do"
+}
+
+@test "run: does not invoke claude when all stories pass" {
+  install_fixture "prd-done.json" "my-feature"
+  create_app_dir "myapp"
+  # Mock claude to write a marker file if called
+  create_mock "claude" 'touch "$TEST_TEMP_DIR/claude-was-called"; echo "mock claude"'
+  run ./ralph run my-feature
+  assert_success
+  [ ! -f "$TEST_TEMP_DIR/claude-was-called" ]
+}
+
+@test "run: shows feature status when all stories pass" {
+  install_fixture "prd-done.json" "my-feature"
+  create_app_dir "myapp"
+  run ./ralph run my-feature
+  assert_success
+  assert_output --partial "PASS"
+  assert_output --partial "1/1 stories complete"
+}
+
+@test "run: does not short-circuit when stories are pending" {
+  install_fixture "prd-pending.json" "my-feature"
+  create_app_dir "myapp"
+  run ./ralph run my-feature --dry-run
+  assert_success
+  refute_output --partial "already passing"
+  assert_output --partial "Dry run"
+}
