@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a **subagent-driven feature development system** for building a Next.js application called **TaskFlow**. Features are defined declaratively in per-feature JSON files under `features/` with user stories, and Claude Code subagents execute jobs (build, lint, typecheck, test) to implement them.
 
-The application code directory is specified by the `appDir` field in each feature's `prd.json` (e.g., `"appDir": "example"`). The orchestration infrastructure (features/, .claude/, CLAUDE.md) lives at the repo root.
+The application code directory is specified by the `appDir` field in each feature's `prd.json` (e.g., `"appDir": "."`). The orchestration infrastructure (features/, .claude/, CLAUDE.md) lives at the repo root alongside the application code.
 
 ## Architecture
 
@@ -54,11 +54,10 @@ Jobs have a `dependsOn` field. A job is runnable when its dependency is `null` o
 ├── .claude/
 │   ├── agents/*.md       # Subagent definitions (build, lint, typecheck, test)
 │   └── commands/*.md     # Orchestrator command definition
-└── <appDir>/             # Application directory (specified in prd.json)
-    ├── package.json
-    ├── src/
-    ├── tsconfig.json
-    └── ...config files
+├── package.json          # Application dependencies
+├── src/                  # Application source code
+├── tsconfig.json         # TypeScript configuration
+└── ...config files       # Next.js, Tailwind, ESLint, Vitest, Playwright
 ```
 
 ## Key Files
@@ -73,10 +72,9 @@ Jobs have a `dependsOn` field. A job is runnable when its dependency is `null` o
 
 ## Commands
 
-All application commands run from the `appDir` directory (e.g., `example/`):
+All application commands run from the project root:
 
 ```bash
-cd <appDir>
 npm run dev          # Start development server
 npm run build        # Production build
 npm run lint         # Run ESLint
