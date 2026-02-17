@@ -24,8 +24,8 @@ tsconfig.tsbuildinfo
 
 # Testing
 coverage/
-example/src/__e2e__/
-example/test-results/
+src/__e2e__/
+test-results/
 __e2e__
 /.claude/settings.local.json
 /.claude/ralph-loop.local.md

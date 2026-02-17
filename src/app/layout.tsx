@@ -15,11 +15,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen antialiased flex flex-col">
+      <body className="min-h-screen antialiased">
         <ThemeProvider>
-          <TaskProvider>
-            <div className="flex-1">{children}</div>
-          </TaskProvider>
+          <TaskProvider>{children}</TaskProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -1,6 +1,6 @@
 {
   "project": "taskflow",
-  "appDir": "example",
+  "appDir": ".",
   "branchName": "feature/pink-footer",
   "description": "Add a distinctive, funky pink footer to TaskFlow that breaks from the conventional design system, providing navigation links, branding, and a memorable visual identity with full responsive and dark mode support.",
   "userStories": [
@@ -20,41 +20,206 @@
       ],
       "priority": 1,
       "model": "sonnet",
-      "passes": true,
+      "passes": false,
       "notes": "",
       "jobs": [
         {
           "name": "build",
           "agent": "build-user-story",
-          "status": "done",
+          "status": "pending",
           "dependsOn": null,
           "notes": ""
         },
         {
           "name": "playwright",
           "agent": "run-playwright",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "build",
           "notes": ""
         },
         {
           "name": "test",
           "agent": "write-tests",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "build",
           "notes": ""
         },
         {
           "name": "typecheck",
           "agent": "run-typecheck",
-          "status": "done",
+          "status": "pending",
           "dependsOn": "test",
           "notes": ""
         },
         {
           "name": "lint",
           "agent": "run-lint",
-          "status": "done",
+          "status": "pending",
+          "dependsOn": "typecheck",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Footer Social Media Icons",
+      "description": "As a user, I want social media icons in the footer so that I can quickly navigate to TaskFlow's social profiles and stay connected with the community.",
+      "acceptanceCriteria": [
+        "A row of at least four social media icons (GitHub, Twitter/X, LinkedIn, Discord) is displayed in the footer",
+        "Each icon is an accessible <a> element with target='_blank', rel='noopener noreferrer', and a descriptive aria-label (e.g. 'Visit TaskFlow on GitHub')",
+        "Icons use inline SVG or an icon library and are sized consistently (24x24 or similar)",
+        "Icons have a white or light-pink default color with a scale or glow hover animation that fits the funky pink theme",
+        "On mobile (<md), the social icons row is centered and appears below the navigation links",
+        "Dark mode: icons remain visible and accessible with appropriate contrast against the dark pink background"
+      ],
+      "priority": 2,
+      "model": "sonnet",
+      "passes": false,
+      "notes": "",
+      "jobs": [
+        {
+          "name": "build",
+          "agent": "build-user-story",
+          "status": "pending",
+          "dependsOn": null,
+          "notes": ""
+        },
+        {
+          "name": "playwright",
+          "agent": "run-playwright",
+          "status": "pending",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "test",
+          "agent": "write-tests",
+          "status": "pending",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "typecheck",
+          "agent": "run-typecheck",
+          "status": "pending",
+          "dependsOn": "test",
+          "notes": ""
+        },
+        {
+          "name": "lint",
+          "agent": "run-lint",
+          "status": "pending",
+          "dependsOn": "typecheck",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Footer Newsletter Signup",
+      "description": "As a user, I want a newsletter signup form in the footer so that I can subscribe to TaskFlow updates without leaving the current page.",
+      "acceptanceCriteria": [
+        "A newsletter signup section is displayed in the footer with a heading (e.g. 'Stay in the loop')",
+        "The form contains an email input field with type='email', placeholder text, and a submit button",
+        "The input and button are styled to complement the pink theme (e.g. white input with pink-700 button or transparent border style)",
+        "Client-side validation shows an inline error message for empty or invalid email formats without a page reload",
+        "On successful submission, the form displays a confirmation message (e.g. 'Thanks for subscribing!') in place of the input",
+        "The form is keyboard-accessible: tab order is logical and the submit button has a visible focus ring",
+        "On mobile (<md), the newsletter section spans full width and stacks below the social icons",
+        "Dark mode: input and button maintain readable contrast and consistent styling"
+      ],
+      "priority": 3,
+      "model": "sonnet",
+      "passes": false,
+      "notes": "",
+      "jobs": [
+        {
+          "name": "build",
+          "agent": "build-user-story",
+          "status": "pending",
+          "dependsOn": null,
+          "notes": ""
+        },
+        {
+          "name": "playwright",
+          "agent": "run-playwright",
+          "status": "pending",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "test",
+          "agent": "write-tests",
+          "status": "pending",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "typecheck",
+          "agent": "run-typecheck",
+          "status": "pending",
+          "dependsOn": "test",
+          "notes": ""
+        },
+        {
+          "name": "lint",
+          "agent": "run-lint",
+          "status": "pending",
+          "dependsOn": "typecheck",
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Footer Back-to-Top Button",
+      "description": "As a user, I want a back-to-top button in the footer so that I can quickly scroll to the top of the page after reading through long content.",
+      "acceptanceCriteria": [
+        "A 'Back to Top' button is displayed in the footer with an upward arrow icon and text label",
+        "Clicking the button smoothly scrolls the page to the top using smooth scroll behavior",
+        "The button is styled as a pill/rounded shape with a contrasting color (e.g. white or pink-200) against the pink footer background",
+        "The button has a hover animation (e.g. bounce, lift, or color shift) consistent with the funky theme",
+        "The button is accessible: it is a <button> element with aria-label='Scroll to top' and a visible focus ring",
+        "On mobile (<md), the button is centered and sized for easy tap targeting (min 44x44px)",
+        "Dark mode: button colors adjust to maintain visibility and contrast against the dark pink footer"
+      ],
+      "priority": 4,
+      "model": "sonnet",
+      "passes": false,
+      "notes": "",
+      "jobs": [
+        {
+          "name": "build",
+          "agent": "build-user-story",
+          "status": "pending",
+          "dependsOn": null,
+          "notes": ""
+        },
+        {
+          "name": "playwright",
+          "agent": "run-playwright",
+          "status": "pending",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "test",
+          "agent": "write-tests",
+          "status": "pending",
+          "dependsOn": "build",
+          "notes": ""
+        },
+        {
+          "name": "typecheck",
+          "agent": "run-typecheck",
+          "status": "pending",
+          "dependsOn": "test",
+          "notes": ""
+        },
+        {
+          "name": "lint",
+          "agent": "run-lint",
+          "status": "pending",
           "dependsOn": "typecheck",
           "notes": ""
         }
