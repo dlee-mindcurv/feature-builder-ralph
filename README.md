@@ -46,14 +46,12 @@ features/pink-footer/prd.json          .claude/agents/
 │   │   └── run-lint.md
 │   └── commands/
 │       └── create-feature-from-json.md   # Orchestrator
-├── example/                   # Target Next.js application (TaskFlow)
-│   ├── src/
-│   │   ├── app/               # Next.js App Router pages
-│   │   ├── components/ui/     # Reusable UI components
-│   │   ├── context/           # React Context providers
-│   │   └── __tests__/         # Vitest test suites
-│   ├── package.json
-│   └── ...config files
+├── src/                       # Target Next.js application (TaskFlow)
+│   ├── app/                   # Next.js App Router pages
+│   ├── components/ui/         # Reusable UI components
+│   ├── context/               # React Context providers
+│   └── __tests__/             # Vitest test suites
+├── package.json               # Application dependencies
 ├── CLAUDE.md                  # Claude Code project instructions
 └── README.md
 ```
@@ -85,7 +83,7 @@ build (no dependency) → playwright (gates on "generated") → test → typeche
 ```json
 {
   "project": "taskflow",
-  "appDir": "example",
+  "appDir": ".",
   "branchName": "feature/pink-footer",
   "description": "Add a distinctive, funky pink footer...",
   "userStories": [
@@ -115,7 +113,7 @@ build (no dependency) → playwright (gates on "generated") → test → typeche
 
 ## Target Application: TaskFlow
 
-The `example/` directory contains **TaskFlow**, a task management app used as the build target.
+The project root contains **TaskFlow**, a task management app used as the build target.
 
 ### Tech Stack
 
@@ -130,7 +128,7 @@ The `example/` directory contains **TaskFlow**, a task management app used as th
 
 ### App Commands
 
-Run from the `example/` directory:
+Run from the project root:
 
 ```bash
 npm run dev          # Start dev server
@@ -217,7 +215,7 @@ git clone <repo-url>
 cd feature-builder-ralph
 
 # Install application dependencies
-cd example && npm install
+npm install
 ```
 
 1. Create a feature directory and `prd.json`:
