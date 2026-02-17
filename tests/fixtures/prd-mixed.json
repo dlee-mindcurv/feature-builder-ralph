@@ -1,0 +1,42 @@
+{
+  "project": "test-project",
+  "appDir": "myapp",
+  "branchName": "feature/test-mixed",
+  "description": "A mixed-progress feature",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Done story",
+      "description": "This one is done",
+      "acceptanceCriteria": ["It works"],
+      "priority": 1,
+      "model": "sonnet",
+      "passes": true,
+      "notes": "",
+      "jobs": [
+        { "name": "build", "agent": "build-user-story", "status": "done", "dependsOn": null, "notes": "" },
+        { "name": "playwright", "agent": "run-playwright", "status": "done", "dependsOn": "build", "notes": "" },
+        { "name": "test", "agent": "write-tests", "status": "done", "dependsOn": "build", "notes": "" },
+        { "name": "typecheck", "agent": "run-typecheck", "status": "done", "dependsOn": "test", "notes": "" },
+        { "name": "lint", "agent": "run-lint", "status": "done", "dependsOn": "typecheck", "notes": "" }
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Pending story",
+      "description": "This one is not done",
+      "acceptanceCriteria": ["It should work"],
+      "priority": 2,
+      "model": "sonnet",
+      "passes": false,
+      "notes": "",
+      "jobs": [
+        { "name": "build", "agent": "build-user-story", "status": "pending", "dependsOn": null, "notes": "" },
+        { "name": "playwright", "agent": "run-playwright", "status": "pending", "dependsOn": "build", "notes": "" },
+        { "name": "test", "agent": "write-tests", "status": "pending", "dependsOn": "build", "notes": "" },
+        { "name": "typecheck", "agent": "run-typecheck", "status": "pending", "dependsOn": "test", "notes": "" },
+        { "name": "lint", "agent": "run-lint", "status": "pending", "dependsOn": "typecheck", "notes": "" }
+      ]
+    }
+  ]
+}
