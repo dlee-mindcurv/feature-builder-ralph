@@ -1,4 +1,4 @@
-# Jobs-to-be-Done Analysis: Pink Footer
+# Jobs-to-be-Done Analysis: Pink Footer Full
 
 ## Feature Summary
 

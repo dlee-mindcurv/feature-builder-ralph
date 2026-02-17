@@ -1,4 +1,4 @@
-# PRD: Pink Footer
+# PRD: Pink Footer Full
 
 ## Introduction
 

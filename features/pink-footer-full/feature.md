@@ -1,4 +1,4 @@
-# Feature: Pink Footer
+# Feature: Pink Footer Full
 
 ## Description
 
