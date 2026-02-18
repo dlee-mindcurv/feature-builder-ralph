@@ -19,6 +19,9 @@ COMMAND_FILES="create-feature-from-json.md"
 AGENTS_DIR=".claude/agents"
 COMMANDS_DIR=".claude/commands"
 FEATURES_DIR="features"
+SKILLS_INSTALL_DIR="${HOME}/.agents/skills"
+GITHUB_API_BASE="https://api.github.com/repos/dlee-mindcurv/cc-automation-tools"
+SKILLS_TREE_PREFIX="feature-builder-ralph/skills/"
 
 # Defaults
 DEFAULT_MAX_ITERATIONS=50
@@ -259,6 +262,32 @@ cmd_doctor() {
     printf "  ${DIM}-${RESET} .claude/commands/ — not found (run: ./ralph install)\n"
   fi
 
+  # Check skills
+  if [[ -d "$SKILLS_INSTALL_DIR" ]]; then
+    local skill_count=0
+    local skill_names=""
+    for skill_dir in "$SKILLS_INSTALL_DIR"/*/; do
+      [[ -d "$skill_dir" ]] || continue
+      if [[ -f "${skill_dir}SKILL.md" ]] || [[ -f "${skill_dir}AGENTS.md" ]]; then
+        skill_count=$((skill_count + 1))
+        local sname
+        sname="$(basename "$skill_dir")"
+        if [[ -n "$skill_names" ]]; then
+          skill_names="${skill_names}, ${sname}"
+        else
+          skill_names="$sname"
+        fi
+      fi
+    done
+    if [[ $skill_count -gt 0 ]]; then
+      printf "  ${GREEN}✓${RESET} skills — %d installed (%s)\n" "$skill_count" "$skill_names"
+    else
+      printf "  ${YELLOW}!${RESET} skills — directory exists but no skills found (run: ./ralph install)\n"
+    fi
+  else
+    printf "  ${YELLOW}!${RESET} skills — %s not found (run: ./ralph install)\n" "$SKILLS_INSTALL_DIR"
+  fi
+
   # Check features directory
   if [[ -d "$FEATURES_DIR" ]]; then
     local feature_count=0
@@ -315,6 +344,75 @@ download_file() {
   fi
 }
 
+download_skills() {
+  local skip_existing="${1:-false}"
+
+  require_jq
+  require_curl
+
+  info "Downloading skills..."
+
+  # Fetch the full repo tree in one API call
+  local tree_json
+  tree_json="$(curl -fsSL "${GITHUB_API_BASE}/git/trees/main?recursive=1" 2>/dev/null)" || {
+    warn "Could not fetch skill tree from GitHub API"
+    return 1
+  }
+
+  # Extract blob paths under the skills prefix
+  local skill_entries
+  skill_entries="$(echo "$tree_json" | jq -r --arg prefix "$SKILLS_TREE_PREFIX" \
+    '.tree[] | select(.path | startswith($prefix)) | select(.type == "blob") | "\(.mode) \(.path)"')" || {
+    warn "Could not parse skill tree JSON"
+    return 1
+  }
+
+  if [[ -z "$skill_entries" ]]; then
+    warn "No skill files found under ${SKILLS_TREE_PREFIX}"
+    return 1
+  fi
+
+  local download_count=0
+  local skip_count=0
+  local fail_count=0
+
+  while IFS= read -r entry; do
+    [[ -z "$entry" ]] && continue
+
+    local mode file_path rel_path dest_path
+    mode="${entry%% *}"
+    file_path="${entry#* }"
+    rel_path="${file_path#"$SKILLS_TREE_PREFIX"}"
+    dest_path="${SKILLS_INSTALL_DIR}/${rel_path}"
+
+    if [[ "$skip_existing" == "true" ]] && [[ -f "$dest_path" ]]; then
+      skip_count=$((skip_count + 1))
+      debug "Skipping existing: $dest_path"
+      continue
+    fi
+
+    local url="${GITHUB_RAW_BASE}/skills/${rel_path}"
+    if download_file "$url" "$dest_path" "false"; then
+      download_count=$((download_count + 1))
+      # Preserve executable permissions
+      if [[ "$mode" == "100755" ]]; then
+        chmod +x "$dest_path"
+        debug "Set executable: $dest_path"
+      fi
+    else
+      fail_count=$((fail_count + 1))
+    fi
+  done <<< "$skill_entries"
+
+  if [[ $fail_count -gt 0 ]]; then
+    warn "Skills: ${download_count} downloaded, ${skip_count} skipped, ${fail_count} failed"
+    return 1
+  fi
+
+  success "Skills: ${download_count} downloaded, ${skip_count} skipped"
+  return 0
+}
+
 cmd_install() {
   local skip_existing=true
   cmd_install_inner "$skip_existing"
@@ -331,7 +429,7 @@ cmd_install_inner() {
 
   require_curl
 
-  info "Installing agents and commands..."
+  info "Installing agents, commands, and skills..."
 
   local failed=false
 
@@ -348,6 +446,9 @@ cmd_install_inner() {
       failed=true
     fi
   done
+
+  # Download skills (non-fatal)
+  download_skills "$skip_existing" || warn "Skill download incomplete — see warnings above"
 
   # Ensure learnings.md exists
   if [[ ! -f "${FEATURES_DIR}/learnings.md" ]]; then
@@ -377,7 +478,7 @@ LEARNINGS
     return 1
   fi
 
-  success "Installed $(echo $AGENT_FILES | wc -w | tr -d ' ') agents and $(echo $COMMAND_FILES | wc -w | tr -d ' ') command(s)"
+  success "Installed $(echo $AGENT_FILES | wc -w | tr -d ' ') agents, $(echo $COMMAND_FILES | wc -w | tr -d ' ') command(s), and skills"
 }
 
 # =============================================================================
@@ -955,8 +1056,8 @@ ${BOLD}COMMANDS${RESET}
   status [feature]    Show feature progress (all features if omitted)
   reset <feature>     Reset all job statuses to pending and remove worktree
   logs <feature>      View agent execution log
-  install             Download agents/commands and sync permissions
-  update              Force re-download latest agent/command versions
+  install             Download agents, commands, and skills; sync permissions
+  update              Force re-download latest agents, commands, and skills
   clean               Remove downloaded agents and commands
   doctor              Check all prerequisites and system health
   self-update         Update the ralph script itself
