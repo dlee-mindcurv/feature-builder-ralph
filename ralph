@@ -894,6 +894,12 @@ LEARNINGS
     debug "Cleaned stale .claude/ralph-loop.local.md"
   fi
 
+  # Clean stale completion marker from crashed sessions
+  if [[ -f ".claude/ralph-completed" ]]; then
+    rm ".claude/ralph-completed"
+    debug "Cleaned stale .claude/ralph-completed"
+  fi
+
   # Read feature metadata for banner
   local description
   description="$(jq -r '.description // ""' "$feature_file")"
