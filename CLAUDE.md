@@ -47,7 +47,7 @@ Skills from `~/.agents/skills/` to inject into subagents. The orchestrator reads
 |-------|------------------------------------|
 | `build-user-story` | `vercel-react-best-practices:full` |
 | `write-tests` |                                    |
-| `run-playwright` |                                    |
+| `run-playwright` | `webapp-testing`                   |
 | `run-typecheck` |                                    |
 | `run-lint` |                                    |
 
