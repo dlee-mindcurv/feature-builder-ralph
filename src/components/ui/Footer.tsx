@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { DigitalClock } from "./DigitalClock";
 
 const navLinks = [
   { href: "/", label: "Home" },
@@ -258,6 +259,11 @@ export function Footer() {
             </svg>
             Back to Top
           </button>
+        </div>
+
+        {/* Digital Clock */}
+        <div className="mt-8">
+          <DigitalClock />
         </div>
 
         {/* Decorative dots pattern */}
