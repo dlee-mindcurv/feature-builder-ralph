@@ -102,3 +102,9 @@ jq '[.userStories[] | {id, passes, jobs: [.jobs[] | {name, status, dependsOn}]}]
 ## Learnings
 
 Findings integrated from feature development runs. This section is automatically updated by the orchestrator when a feature completes.
+
+### digital-clock
+
+- [build-user-story] US-003: DigitalClock tooltip state is managed with isHovered (useState) and currentQuoteRef (useRef) to select a new random quote on each hover without re-rendering on quote change. The tooltip uses useId() for a stable aria-describedby linkage between tooltip and clock anchor.
+- [build-user-story] US-004: Konami Code Easter egg uses konamiProgressRef (useRef) to track sequence progress without triggering re-renders, isColorCycling/colorIndex state for the neon cycle, and a timed isFlashing state for the white flash overlay with a @keyframes konamiFlash CSS animation.
+- [run-playwright] US-004: Chromium renders CSS hex colors with color profile correction, so `getComputedStyle().color` may return slightly different RGB values than the source hex. Avoid asserting exact RGB values for neon colors; instead assert that the color changed from the baseline.
