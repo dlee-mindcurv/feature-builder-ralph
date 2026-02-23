@@ -1,4 +1,5 @@
 import { Logo } from "@/components/ui/Logo";
+import { TurtleSvg } from "@/components/ui/TurtleSvg";
 
 export default function Home() {
   return (
@@ -15,6 +16,9 @@ export default function Home() {
         <p className="mt-2 text-gray-500 dark:text-gray-400">
           Get started by adding your first task.
         </p>
+        <div className="mt-4">
+          <TurtleSvg />
+        </div>
       </main>
     </div>
   );
